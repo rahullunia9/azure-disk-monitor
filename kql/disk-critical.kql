@@ -1,0 +1,11 @@
+// Separate critical Scheduled query alert: a disk/mount has less than 10% free space.
+Perf
+| where TimeGenerated > ago(10m)
+| where ObjectName == "LogicalDisk" or ObjectName == "Logical Disk"
+| where CounterName == "% Free Space"
+| where InstanceName != "_Total"
+| summarize arg_max(TimeGenerated, CounterValue) by Computer, InstanceName, ObjectName, _ResourceId
+| where CounterValue < 10
+| extend OS = iff(ObjectName == "LogicalDisk", "Windows", "Linux")
+| project TimeGenerated, Computer, OS, DriveOrMount = InstanceName,
+          FreePercent = round(CounterValue, 1), _ResourceId

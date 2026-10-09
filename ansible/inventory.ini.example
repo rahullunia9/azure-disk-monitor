@@ -1,0 +1,23 @@
+# For POC only
+# Store credentials in Ansible Vault or AWX/AAP credentials, not in this file.
+
+[windows]
+rahulappvm01 ansible_host=10.20.1.10
+rahulwebvm01 ansible_host=10.20.2.10
+
+[windows:vars]
+ansible_connection=winrm
+ansible_port=5986
+ansible_winrm_transport=kerberos
+ansible_winrm_server_cert_validation=validate
+ansible_user=Global\svc_ansible
+
+[linux]
+rahullinuxvm01 ansible_host=10.20.3.10
+
+[linux:vars]
+ansible_connection=ssh
+ansible_user=svc_ansible
+ansible_become=true
+ansible_become_method=sudo
+# Configure SSH key or vaulted password through your automation platform.

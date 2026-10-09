@@ -1,0 +1,47 @@
+---
+# Run on demand to check Linux filesystems and Azure Monitor Agent status.
+# Continuous collection and alerting are handled by Azure Monitor.
+- name: Check disk space on Linux Azure VMs
+  hosts: linux
+  gather_facts: false
+  serial: 25
+
+  vars:
+    warning_free_percent: 15
+    critical_free_percent: 10
+
+  tasks:
+    - name: Check Azure Monitor Agent service
+      ansible.builtin.command: systemctl is-active azuremonitoragent
+      register: ama_service
+      changed_when: false
+      failed_when: false
+
+    - name: Read mounted filesystem usage
+      ansible.builtin.shell: |
+        df -PTk | awk '
+          NR == 1 { next }
+          {
+            fs_type = $2
+            if (fs_type ~ /^(tmpfs|devtmpfs|squashfs|overlay|proc|sysfs|devpts|cgroup|cgroup2|securityfs|pstore|debugfs|tracefs|mqueue|hugetlbfs|fusectl|configfs)$/) next
+            used_percent = $6
+            gsub(/%/, "", used_percent)
+            free_percent = 100 - used_percent
+            size_gb = $3 / 1024 / 1024
+            free_gb = $5 / 1024 / 1024
+            status = (free_percent <= {{ critical_free_percent }}) ? "CRITICAL" : ((free_percent <= {{ warning_free_percent }}) ? "WARNING" : "OK")
+            printf "Mount=%s Type=%s SizeGB=%.1f FreeGB=%.1f FreePercent=%.1f Status=%s\n", $7, fs_type, size_gb, free_gb, free_percent, status
+          }
+        '
+      args:
+        executable: /bin/bash
+      register: disk_check
+      changed_when: false
+
+    - name: Show Azure Monitor Agent status
+      ansible.builtin.debug:
+        msg: "Azure Monitor Agent service status: {{ ama_service.stdout | default('unknown') }}"
+
+    - name: Show filesystem status
+      ansible.builtin.debug:
+        var: disk_check.stdout_lines

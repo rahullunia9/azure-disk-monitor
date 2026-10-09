@@ -1,0 +1,12 @@
+// Use as a table in an Azure Monitor Workbook.
+// Shows the latest free-space percentage for Windows drives and Linux mounts.
+Perf
+| where TimeGenerated > ago(15m)
+| where ObjectName == "LogicalDisk" or ObjectName == "Logical Disk"
+| where CounterName == "% Free Space"
+| where InstanceName != "_Total"
+| summarize arg_max(TimeGenerated, CounterValue) by Computer, InstanceName, ObjectName, _ResourceId
+| extend OS = iff(ObjectName == "LogicalDisk", "Windows", "Linux")
+| project Computer, OS, DriveOrMount = InstanceName,
+          FreePercent = round(CounterValue, 1), TimeGenerated, _ResourceId
+| order by FreePercent asc

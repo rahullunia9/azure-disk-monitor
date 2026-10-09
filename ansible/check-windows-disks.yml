@@ -1,0 +1,50 @@
+---
+# Run this on demand to verify disk space and that Azure Monitor Agent is running.
+# Continuous collection and alerting are handled by Azure Monitor, not this playbook.
+- name: Check disk space on Windows Azure VMs
+  hosts: windows
+  gather_facts: false
+  serial: 25
+
+  vars:
+    warning_free_percent: 15
+    critical_free_percent: 10
+
+  tasks:
+    - name: Read fixed disks and Azure Monitor Agent service
+      ansible.windows.win_powershell:
+        script: |
+          $agent = Get-Service -Name AzureMonitorAgent -ErrorAction SilentlyContinue
+          $agentStatus = if ($null -eq $agent) { 'NotInstalled' } else { [string]$agent.Status }
+
+          $disks = Get-CimInstance Win32_LogicalDisk -Filter "DriveType = 3"
+          $report = foreach ($disk in $disks) {
+            $freePercent = if ($disk.Size -gt 0) {
+              [math]::Round(($disk.FreeSpace / $disk.Size) * 100, 1)
+            } else { 0 }
+
+            $status = if ($freePercent -le {{ critical_free_percent }}) {
+              'CRITICAL'
+            } elseif ($freePercent -le {{ warning_free_percent }}) {
+              'WARNING'
+            } else {
+              'OK'
+            }
+
+            [PSCustomObject]@{
+              Computer = $env:COMPUTERNAME
+              Drive = $disk.DeviceID
+              SizeGB = [math]::Round($disk.Size / 1GB, 1)
+              FreeGB = [math]::Round($disk.FreeSpace / 1GB, 1)
+              FreePercent = $freePercent
+              DiskStatus = $status
+              AzureMonitorAgent = $agentStatus
+            }
+          }
+
+          $Ansible.Result = @($report)
+      register: disk_check
+
+    - name: Show current disk status
+      ansible.builtin.debug:
+        var: disk_check.result

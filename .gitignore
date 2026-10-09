@@ -1,0 +1,6 @@
+*.retry
+*.log
+inventory.ini
+vault*.yml
+.env
+__pycache__/
